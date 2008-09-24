@@ -204,10 +204,12 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
                 w.close()
             except TypeError:
                 # We're on Windows.
-                irc.error('This command won\'t work on this platform.  '
-                          'If you think it should (i.e., you know that you '
-                          'have a zgrep binary somewhere) then file a bug '
-                          'about it at http://supybot.sf.net/ .', Raise=True)
+                irc.error(format('This command won\'t work on this platform.  '
+                                 'If you think it should (i.e., you know that '
+                                 'you have a zgrep binary somewhere) then '
+                                 'file a bug about it at %u.',
+                                 'http://sourceforge.net/projects/supybot'),
+                          Raise=True)
         packages = set()  # Make packages unique
         try:
             for line in r:
