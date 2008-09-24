@@ -163,6 +163,10 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
                              604800, None)
         }
     contents = conf.supybot.directories.data.dirize('Contents-i386.gz')
+    def __init__(self, irc):
+        callbacks.Plugin.__init__(self, irc)
+        PeriodicFileDownloader.__init__(self)
+
     def file(self, irc, msg, args, optlist, glob):
         """[--{regexp,exact} <value>] [<glob>]
 
