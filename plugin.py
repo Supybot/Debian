@@ -236,66 +236,63 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
     file = wrap(file, [getopts({'regexp':'regexpMatcher','exact':'something'}),
                        additional('glob')])
 
-    _debreflags = re.DOTALL | re.IGNORECASE
-    _deblistre = re.compile(r'<h3>Package ([^<]+)</h3>(.*?)</ul>', _debreflags)
-    def version(self, irc, msg, args, optlist, branch, package):
-        """[--exact] [{stable,testing,unstable,experimental}] <package name>
+    _madisonUrl = \
+        'http://qa.debian.org/madison.php?package=%s&text=on&a=%s&s=%s'
+    _splitRe = re.compile(r'\s*\|\s*')
+    def version(self, irc, msg, args, optlist, suite, package):
+        """[--arch=<value>] [<suite>] <package name>
 
-        Returns the current version(s) of a Debian package in the given branch
-        (if any, otherwise all available ones are displayed).  If --exact is
-        specified, only packages whose name exactly matches <package name>
-        will be reported.
+        Returns the current version(s) of a Debian package in the given suite
+        (if any, otherwise all available ones are displayed), architecture, and
+        component.
+
+        Valid suites are: oldstable, stable, testing, unstable, experimental
+        Valid architectures are: alpha, amd64, arm, armel, hppa, hurd-i386,
+        i386, ia64, m68k, mips, mipsel, powerpc, s390, sparc
         """
-        url = 'http://packages.debian.org/cgi-bin/search_packages.pl?keywords'\
-              '=%s&searchon=names&version=%s&release=all&subword=1'
-        for (option, _) in optlist:
-            if option == 'exact':
-                url = url.replace('&subword=1','')
-        responses = []
-        if '*' in package:
-            irc.error('Wildcard characters can not be specified.', Raise=True)
+        arch = ''
+        for (opt, val) in optlist:
+            if opt == 'arch':
+                arch = val
         package = utils.web.urlquote(package)
-        url %= (package, branch)
         try:
-            html = utils.web.getUrl(url)
+            fd = utils.web.getUrlFd(self._madisonUrl %
+                                    (utils.web.urlquote(package), arch, suite))
         except utils.web.Error, e:
             irc.error(format('I couldn\'t reach the search page (%s).', e),
                       Raise=True)
-        if 'is down at the moment' in html:
-            irc.error('Packages.debian.org is down at the moment.  '
-                      'Please try again later.', Raise=True)
-        pkgs = self._deblistre.findall(html)
-        if not pkgs:
-            irc.reply(format('No package found for %s (%s)',
-                      utils.web.urlunquote(package), branch))
-        else:
-            for pkg in pkgs:
-                pkgMatch = pkg[0]
-                soup = BeautifulSoup.BeautifulSoup()
-                soup.feed(pkg[1])
-                liBranches = soup.fetch('li')
-                branches = []
-                versions = []
-                def branchVers(br):
-                    vers = [b.next.string.strip() for b in br]
-                    return [utils.str.rsplit(v, ':', 1)[0] for v in vers]
-                for li in liBranches:
-                    branches.append(li.a.string)
-                    versions.append(branchVers(li.fetch('br')))
-                if branches and versions:
-                    for pairs in  zip(branches, versions):
-                        branch = pairs[0]
-                        ver = ', '.join(pairs[1])
-                        s = format('%s (%s)', pkgMatch,
-                                   ': '.join([branch, ver]))
-                        responses.append(s)
+        responses = []
+        for line in fd:
+            # package | version | suite | architectures
+            fields = self._splitRe.split(line.strip())
+            pkg = fields[0]
+            suites = []
+            versions = []
+            for li in liBranches:
+                branches.append(li.a.string)
+                versions.append(branchVers(li.fetch('br')))
+            if branches and versions:
+                for pairs in  zip(branches, versions):
+                    branch = pairs[0]
+                    ver = ', '.join(pairs[1])
+                    s = format('%s (%s)', pkgMatch,
+                               ': '.join([branch, ver]))
+                    responses.append(s)
             resp = format('%n found: %s',
                           (len(responses), 'match'), '; '.join(responses))
             irc.reply(resp)
-    version = wrap(version, [getopts({'exact':''}),
-                             optional(('literal', ('stable', 'testing',
-                                       'unstable', 'experimental')), 'all'),
-                             'text'])
+    version = wrap(version, [getopts({'arch': ('literal', ('alpha', 'amd64',
+                                                           'arm', 'armel',
+                                                           'hppa', 'hurd-i386',
+                                                           'i386', 'ia64',
+                                                           'm68k', 'mips',
+                                                           'mipsel', 'powerpc',
+                                                           's390', 'sparc')),
+                                     }),
+                             optional(('literal', ('oldstable', 'stable',
+                                                   'testing', 'unstable',
+                                                   'experimental')), ''),
+                             'something'])
 
     _incomingRe = re.compile(r'<a href="(.*?\.deb)">', re.I)
     def incoming(self, irc, msg, args, optlist, globs):
