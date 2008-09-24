@@ -62,15 +62,11 @@ class DebianTestCase(PluginTestCase):
         def testDebversion(self):
             self.assertHelp('debian version')
             self.assertRegexp('debian version lakjdfad',
-                              r'^No package.*\(all\)')
+                              r'^No version information found.*')
             self.assertRegexp('debian version unstable alkdjfad',
-                r'^No package.*\(unstable\)')
-            self.assertRegexp('debian version gaim',
-                              r'\d+ matches found:.*gaim.*\(stable')
-            self.assertRegexp('debian version linux-wlan',
-                              r'\d+ matches found:.*linux-wlan.*')
-            self.assertRegexp('debian version --exact linux-wlan',
-                              r'^No package.*\(all\)')
+                              r'^No version information found.*')
+            self.assertRegexp('debian version pidgin',
+                              r'.*unstable.*')
             self.assertError('debian version unstable')
 
         def testDebfile(self):

@@ -265,26 +265,24 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
         except utils.web.Error, e:
             irc.error(format('I couldn\'t reach the search page (%s).', e),
                       Raise=True)
-        responses = []
+        versions = {}
         for line in fd:
             # package | version | suite | architectures
-            fields = self._splitRe.split(line.strip())
-            pkg = fields[0]
-            suites = []
-            versions = []
-            for li in liBranches:
-                branches.append(li.a.string)
-                versions.append(branchVers(li.fetch('br')))
-            if branches and versions:
-                for pairs in  zip(branches, versions):
-                    branch = pairs[0]
-                    ver = ', '.join(pairs[1])
-                    s = format('%s (%s)', pkgMatch,
-                               ': '.join([branch, ver]))
-                    responses.append(s)
-            resp = format('%n found: %s',
-                          (len(responses), 'match'), '; '.join(responses))
-            irc.reply(resp)
+            (pkg, ver, ste, arch)  = self._splitRe.split(line.strip())
+            versions.setdefault(ver, [[],[]])
+            versions[ver][0].append(ste)
+            versions[ver][1].append(arch)
+        if versions:
+            responses = []
+            for (ver, (suites, archs)) in versions.iteritems():
+                L = [': '.join((self.bold(suite), arch)) \
+                     for (suite, arch) in zip(suites, archs)]
+                s = format('%s (%s)', ver, ', '.join(L))
+                responses.append(s)
+            responses.sort()
+            irc.reply('; '.join(responses))
+        else:
+            irc.reply(format('No version information found for %s.', package))
     version = wrap(version, [getopts({'arch': ('literal', ('alpha', 'amd64',
                                                            'arm', 'armel',
                                                            'hppa', 'hurd-i386',
