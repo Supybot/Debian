@@ -244,7 +244,7 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
         'http://qa.debian.org/madison.php?package=%s&text=on&a=%s&s=%s'
     _splitRe = re.compile(r'\s*\|\s*')
     def version(self, irc, msg, args, optlist, suite, package):
-        """[--arch=<value>] [<suite>] <package name>
+        """[--arch=<value>] [--verbose] [<suite>] <package name>
 
         Returns the current version(s) of a Debian package in the given suite
         (if any, otherwise all available ones are displayed), architecture, and
@@ -255,9 +255,12 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
         i386, ia64, m68k, mips, mipsel, powerpc, s390, sparc
         """
         arch = ''
+        verbose = False
         for (opt, val) in optlist:
             if opt == 'arch':
                 arch = val
+            if opt == 'verbose':
+                verbose = True
         package = utils.web.urlquote(package)
         try:
             fd = utils.web.getUrlFd(self._madisonUrl %
@@ -275,15 +278,19 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
         if versions:
             responses = []
             for (ver, (suites, archs)) in versions.iteritems():
-                L = [': '.join((self.bold(suite), arch)) \
-                     for (suite, arch) in zip(suites, archs)]
-                s = format('%s (%s)', ver, ', '.join(L))
+                if verbose:
+                    L = [': '.join((self.bold(suite), arch)) \
+                         for (suite, arch) in zip(suites, archs)]
+                    s = format('%s (%s)', ver, ', '.join(L))
+                else:
+                    s = format('%s (%s)', ver, ', '.join(suites))
                 responses.append(s)
             responses.sort()
             irc.reply('; '.join(responses))
         else:
             irc.reply(format('No version information found for %s.', package))
-    version = wrap(version, [getopts({'arch': ('literal', ('alpha', 'amd64',
+    version = wrap(version, [getopts({'verbose': '',
+                                      'arch': ('literal', ('alpha', 'amd64',
                                                            'arm', 'armel',
                                                            'hppa', 'hurd-i386',
                                                            'i386', 'ia64',
