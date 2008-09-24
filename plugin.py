@@ -361,35 +361,42 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
         m = self._update.search(text)
         if m:
             updated = m.group(1)
-        soup = BeautifulSoup.BeautifulSoup()
-        soup.feed(text)
-        pairs = zip(soup.fetch('td', {'class': 'labelcell'}),
-                    soup.fetch('td', {'class': 'contentcell'}))
+        soup = BeautifulSoup.BeautifulSoup(text)
+        pairs = zip(soup.findAll('td', {'class': 'labelcell'}),
+                    soup.findAll('td', {'class': 'contentcell'}))
         version = 'No version found'
         for (label, content) in pairs:
-            if label.string == 'Latest version':
-                version = '%s: %s' % (self.bold(label.string), content.string)
-            elif label.string == 'Maintainer':
+            s = label.string
+            if not s and label.span and label.span.acronym:
+                s = label.span.acronym['title']
+            else:
+                s = label.next.string
+            if s == 'Latest version':
+                version = '%s: %s' % (self.bold(s), content.string)
+            elif s == 'Maintainer':
                 name = content.a.string
-                email = content.fetch('a')[1]['href'][7:]
+                email = content.findAll('a')[1]['href'][7:].encode('utf-8')
                 maintainer = format('%s: %s %u', self.bold('Maintainer'),
                                     name, utils.web.mungeEmail(email))
-            elif label.string == 'All bugs':
-                bugsAll = format('%i Total', content.first('a').string)
-            elif label.string == 'Release Critical':
-                bugsRC = format('%i RC', content.first('a').string)
-            elif label.string == 'Important and Normal':
+            elif s.startswith('All bugs'):
+                bugsAll = format('%i Total',
+                                 content.find('a').string.encode('utf-8'))
+            elif s == 'Release Critical':
+                bugsRC = format('%i RC',
+                                content.find('a').string.encode('utf-8'))
+            elif s == 'Important and Normal':
                 bugs = format('%i Important/Normal',
-                              content.first('a').string)
-            elif label.string == 'Minor and Wishlist':
+                              content.find('a').string.encode('utf-8'))
+            elif s == 'Minor and Wishlist':
                 bugsMinor = format('%i Minor/Wishlist',
-                                   content.first('a').string)
-            elif label.string == 'Fixed and Pending':
+                                   content.find('a').string.encode('utf-8'))
+            elif s == 'Fixed and Pending':
                 bugsFixed = format('%i Fixed/Pending',
-                                   content.first('a').string)
-            elif label.string == 'Subscribers count':
+                                   content.find('a').string.encode('utf-8'))
+            elif s == 'Subscribers count':
                 subscribers = format('%s: %i',
-                                     self.bold('Subscribers'), content.string)
+                                     self.bold('Subscribers'),
+                                     content.string.encode('utf-8'))
         bugL = (bugsAll, bugsRC, bugs, bugsMinor, bugsFixed)
         s = '.  '.join((version, maintainer, subscribers,
                         '%s: %s' % (self.bold('Bugs'), '; '.join(bugL))))
