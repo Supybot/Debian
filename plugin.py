@@ -358,8 +358,12 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
         <source package>.
         """
         pkg = pkg.lower()
-        text = utils.web.getUrl('http://packages.qa.debian.org/%s/%s.html' %
-                                (pkg[0], pkg))
+        if pkg.startswith('lib'):
+            text = utils.web.getUrl('http://packages.qa.debian.org/%s/%s.html' %
+                                    (pkg[:4], pkg))
+        else:
+            text = utils.web.getUrl('http://packages.qa.debian.org/%s/%s.html' %
+                                    (pkg[0], pkg))
         if "Error 404" in text:
             irc.errorInvalid('source package name')
         updated = None

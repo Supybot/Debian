@@ -83,6 +83,7 @@ class DebianTestCase(PluginTestCase):
 
         def testDebstats(self):
             self.assertNotError('stats supybot')
+            self.assertNotError('stats libacpi')
 
 
 # vim:set shiftwidth=4 softtabstop=4 expandtab textwidth=79:
