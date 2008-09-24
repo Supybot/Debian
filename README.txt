@@ -1,3 +1,6 @@
 Simple plugin to allow checking versions of packages in Debian, searching for
 packages which contain a certain file, getting bug descriptions, and similar
 information.
+
+Dependencies:
+- BeautifulSoup >= 3.0.1 <http://crummy.com/software/BeautifulSoup>
