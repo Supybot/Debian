@@ -144,7 +144,7 @@ class Debian(callbacks.Plugin, plugins.PeriodicFileDownloader):
 
         Valid suites are: oldstable, stable, testing, unstable, experimental
         Valid architectures are: alpha, amd64, arm, armel, hppa, hurd-i386,
-        i386, ia64, m68k, mips, mipsel, powerpc, s390, sparc
+        i386, ia64, mips, mipsel, powerpc, s390, sparc
         """
         arch = ''
         verbose = False
@@ -186,7 +186,7 @@ class Debian(callbacks.Plugin, plugins.PeriodicFileDownloader):
                                                            'arm', 'armel',
                                                            'hppa', 'hurd-i386',
                                                            'i386', 'ia64',
-                                                           'm68k', 'mips',
+                                                           'mips',
                                                            'mipsel', 'powerpc',
                                                            's390', 'sparc')),
                                      }),
