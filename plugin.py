@@ -34,7 +34,7 @@ import time
 import popen2
 import fnmatch
 
-import BeautifulSoup
+from ZSI.client import Binding
 
 import supybot.conf as conf
 import supybot.utils as utils
@@ -302,47 +302,36 @@ class Debian(callbacks.Plugin, plugins.PeriodicFileDownloader):
                               'main'),
                      additional('glob', '*')])
 
-    _severity = re.compile(r'.*(?:severity set to `([^\']+)\'|'
-                           r'severity:\s+<em>([^<]+)</em>)', re.I)
-    _package = re.compile(r'Package: <[^>]+>([^<]+)<', re.I | re.S)
-    _reporter = re.compile(r'Reported by: <[^>]+>([^<]+)<', re.I | re.S)
-    _subject = re.compile(r'<br>([^<]+)</h1>', re.I | re.S)
-    _date = re.compile(r'Date: ([^;]+);', re.I | re.S)
-    _tags = re.compile(r'Tags: <strong>([^<]+)</strong>', re.I)
-    _searches = (_package, _subject, _reporter, _date)
+    _bugUri = 'http://bugs.debian.org/%s'
+    _soapUri = 'http://bugs.debian.org/cgi-bin/soap.cgi'
+    _soapNs = 'Debbugs/SOAP/1'
     def bug(self, irc, msg, args, bug):
         """<num>
 
         Returns a description of the bug with bug id <num>.
         """
-        url = 'http://bugs.debian.org/%s' % bug
-        try:
-            text = utils.web.getUrl(url)
-        except utils.web.Error, e:
-            irc.error(str(e), Raise=True)
-        if "There is no record of Bug" in text:
+        server = Binding(self._soapUri, self._soapNs)
+        response = server.get_status(bug)
+        # response = {'s-gensym3': {bug1: {'date':..., ...}, bug2: ...}}
+        status = response['s-gensym3']
+        if status is None:
             irc.error('I could not find a bug report matching that number.',
                       Raise=True)
-        searches = map(lambda p: p.search(text), self._searches)
-        sev = self._severity.search(text)
-        tags = self._tags.search(text)
-        # This section should be cleaned up to ease future modifications
-        if all(None, searches):
-            L = map(self.bold, ('Package', 'Subject', 'Reported'))
-            resp = format('%s: %%s; %s: %%s; %s: by %%s on %%s', *L)
-            L = map(utils.web.htmlToText, map(lambda p: p.group(1), searches))
-            resp = format(resp, *L)
-            if sev:
-                sev = filter(None, sev.groups())
-                if sev:
-                    sev = utils.web.htmlToText(sev[0])
-                    resp += format('; %s: %s', self.bold('Severity'), sev)
-            if tags:
-                resp += format('; %s: %s', self.bold('Tags'), tags.group(1))
-            resp += format('; %u', url)
-            irc.reply(resp)
-        else:
-            irc.reply('I was unable to properly parse the BTS page.')
+        status = status[bug]
+        timeFormat = conf.supybot.reply.format.time()
+        searches = (status['package'], status['subject'], status['originator'],
+                    time.strftime(timeFormat, time.gmtime(status['date'])))
+        severity = status['severity']
+        tags = status['tags'].split()
+        L = map(self.bold, ('Package', 'Subject', 'Reported'))
+        resp = format('%s: %%s; %s: %%s; %s: by %%s on %%s', *L)
+        resp = format(resp, *searches)
+        if severity:
+            resp += format('; %s: %s', self.bold('Severity'), severity)
+        if tags:
+            resp += format('; %s: %L', self.bold('Tags'), tags)
+        resp += format('; %u', self._bugUri % bug)
+        irc.reply(resp)
     bug = wrap(bug, [('id', 'bug')])
 
     _dpnRe = re.compile(r'"\+2">([^<]+)</font', re.I)
