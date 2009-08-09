@@ -1,5 +1,5 @@
 ###
-# Copyright (c) 2003-2006,2008, James Vega
+# Copyright (c) 2003-2006,2008-2009 James Vega
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,6 @@ import gzip
 import time
 import popen2
 import fnmatch
-import threading
 
 import BeautifulSoup
 
@@ -46,114 +45,7 @@ import supybot.ircutils as ircutils
 import supybot.callbacks as callbacks
 from supybot.utils.iter import all, imap, ifilter
 
-class PeriodicFileDownloader(object):
-    """A class to periodically download a file/files.
-
-    A class-level dictionary 'periodicFiles' maps names of files to
-    three-tuples of
-    (url, seconds between downloads, function to run with downloaded file).
-
-    'url' should be in some form that urllib2.urlopen can handle (do note that
-    urllib2.urlopen handles file:// links perfectly well.)
-
-    'seconds between downloads' is the number of seconds between downloads,
-    obviously.  An important point to remember, however, is that it is only
-    engaged when a command is run.  I.e., if you say you want the file
-    downloaded every day, but no commands that use it are run in a week, the
-    next time such a command is run, it'll be using a week-old file.  If you
-    don't want such behavior, you'll have to give an error mess age to the user
-    and tell him to call you back in the morning.
-
-    'function to run with downloaded file' is a function that will be passed
-    a string *filename* of the downloaded file.  This will be some random
-    filename probably generated via some mktemp-type-thing.  You can do what
-    you want with this; you may want to build a database, take some stats,
-    or simply rename the file.  You can pass None as your function and the
-    file with automatically be renamed to match the filename you have it listed
-    under.  It'll be in conf.supybot.directories.data, of course.
-
-    Aside from that dictionary, simply use self.getFile(filename) in any method
-    that makes use of a periodically downloaded file, and you'll be set.
-    """
-    periodicFiles = None
-    def __init__(self, *args, **kwargs):
-        if self.periodicFiles is None:
-            raise ValueError, 'You must provide files to download'
-        self.lastDownloaded = {}
-        self.downloadedCounter = {}
-        for filename in self.periodicFiles:
-            if self.periodicFiles[filename][-1] is None:
-                fullname = os.path.join(conf.supybot.directories.data(),
-                                        filename)
-                if os.path.exists(fullname):
-                    self.lastDownloaded[filename] = os.stat(fullname).st_ctime
-                else:
-                    self.lastDownloaded[filename] = 0
-            else:
-                self.lastDownloaded[filename] = 0
-            self.currentlyDownloading = set()
-            self.downloadedCounter[filename] = 0
-            self.getFile(filename)
-        super(PeriodicFileDownloader, self).__init__(*args, **kwargs)
-
-    def _downloadFile(self, filename, url, f):
-        self.currentlyDownloading.add(filename)
-        try:
-            try:
-                infd = utils.web.getUrlFd(url)
-            except IOError, e:
-                self.log.warning('Error downloading %s: %s', url, e)
-                return
-            except utils.web.Error, e:
-                self.log.warning('Error downloading %s: %s', url, e)
-                return
-            confDir = conf.supybot.directories.data()
-            newFilename = os.path.join(confDir, utils.file.mktemp())
-            outfd = file(newFilename, 'wb')
-            start = time.time()
-            s = infd.read(4096)
-            while s:
-                outfd.write(s)
-                s = infd.read(4096)
-            infd.close()
-            outfd.close()
-            self.log.info('Downloaded %s in %s seconds',
-                          filename, time.time()-start)
-            self.downloadedCounter[filename] += 1
-            self.lastDownloaded[filename] = time.time()
-            if f is None:
-                toFilename = os.path.join(confDir, filename)
-                if os.name == 'nt':
-                    # Windows, grrr...
-                    if os.path.exists(toFilename):
-                        os.remove(toFilename)
-                os.rename(newFilename, toFilename)
-            else:
-                start = time.time()
-                f(newFilename)
-                total = time.time() - start
-                self.log.info('Function ran on %s in %s seconds',
-                              filename, total)
-        finally:
-            self.currentlyDownloading.remove(filename)
-
-    def getFile(self, filename):
-        if world.documenting:
-            return
-        (url, timeLimit, f) = self.periodicFiles[filename]
-        if time.time() - self.lastDownloaded[filename] > timeLimit and \
-           filename not in self.currentlyDownloading:
-            self.log.info('Beginning download of %s', url)
-            args = (filename, url, f)
-            name = '%s #%s' % (filename, self.downloadedCounter[filename])
-            t = threading.Thread(target=self._downloadFile, name=name,
-                                 args=(filename, url, f))
-            t.setDaemon(True)
-            t.start()
-            world.threadsSpawned += 1
-
-
-class Debian(callbacks.Plugin, PeriodicFileDownloader):
+class Debian(callbacks.Plugin, plugins.PeriodicFileDownloader):
     threaded = True
     periodicFiles = {
         # This file is only updated once a week, so there's no sense in
@@ -165,7 +57,7 @@ class Debian(callbacks.Plugin, PeriodicFileDownloader):
     contents = conf.supybot.directories.data.dirize('Contents-i386.gz')
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
-        PeriodicFileDownloader.__init__(self)
+        plugins.PeriodicFileDownloader.__init__(self)
 
     def file(self, irc, msg, args, optlist, glob):
         """[--{regexp,exact} <value>] [<glob>]
