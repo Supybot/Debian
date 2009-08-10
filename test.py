@@ -73,7 +73,7 @@ class DebianTestCase(PluginTestCase):
             self.assertHelp('file')
             if not self.fileDownloaded:
                 pass
-            self.assertRegexp('file --exact bin/gaim', r'net/gaim')
+            self.assertRegexp('file --exact bin/pidgin', r'net/pidgin')
 
         def testDebincoming(self):
             self.assertNotError('incoming')
