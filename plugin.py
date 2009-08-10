@@ -242,7 +242,7 @@ class Debian(callbacks.Plugin, plugins.PeriodicFileDownloader):
             return ircutils.bold(s)
         return s
 
-    _update = re.compile(r' : ([^<]+)</body', re.I)
+    _ptsUri = 'http://packages.qa.debian.org/cgi-bin/soap-alpha.cgi'
     def stats(self, irc, msg, args, pkg):
         """<source package>
 
@@ -250,59 +250,26 @@ class Debian(callbacks.Plugin, plugins.PeriodicFileDownloader):
         <source package>.
         """
         pkg = pkg.lower()
-        if pkg.startswith('lib'):
-            text = utils.web.getUrl('http://packages.qa.debian.org/%s/%s.html' %
-                                    (pkg[:4], pkg))
-        else:
-            text = utils.web.getUrl('http://packages.qa.debian.org/%s/%s.html' %
-                                    (pkg[0], pkg))
-        if "Error 404" in text:
+        pts = Binding(self._ptsUri)
+        try:
+            version = pts.latest_version(pkg)
+            maintainer = pts.maintainer(pkg)
+            bugCounts = pts.bug_counts(pkg)
+        except ZSI.FaultException:
             irc.errorInvalid('source package name')
-        updated = None
-        m = self._update.search(text)
-        if m:
-            updated = m.group(1)
-        soup = BeautifulSoup.BeautifulSoup(text)
-        pairs = zip(soup.findAll('td', {'class': 'labelcell'}),
-                    soup.findAll('td', {'class': 'contentcell'}))
-        version = 'No version found'
-        for (label, content) in pairs:
-            s = label.string
-            if not s and label.span and label.span.acronym:
-                s = label.span.acronym['title']
-            else:
-                s = label.next.string
-            if s == 'Latest version':
-                version = '%s: %s' % (self.bold(s), content.string)
-            elif s == 'Maintainer':
-                name = content.a.string
-                email = content.findAll('a')[1]['href'][7:].encode('utf-8')
-                maintainer = format('%s: %s %u', self.bold('Maintainer'),
-                                    name, utils.web.mungeEmail(email))
-            elif s.startswith('All bugs'):
-                bugsAll = format('%i Total',
-                                 content.find('a').string.encode('utf-8'))
-            elif s == 'Release Critical':
-                bugsRC = format('%i RC',
-                                content.find('a').string.encode('utf-8'))
-            elif s == 'Important and Normal':
-                bugs = format('%i Important/Normal',
-                              content.find('a').string.encode('utf-8'))
-            elif s == 'Minor and Wishlist':
-                bugsMinor = format('%i Minor/Wishlist',
-                                   content.find('a').string.encode('utf-8'))
-            elif s == 'Fixed and Pending':
-                bugsFixed = format('%i Fixed/Pending',
-                                   content.find('a').string.encode('utf-8'))
-            elif s == 'Subscribers count':
-                subscribers = format('%s: %i',
-                                     self.bold('Subscribers'),
-                                     content.string.encode('utf-8'))
+        version = '%s: %s' % (self.bold('Latest version'), version)
+        mname = maintainer['name']
+        memail = maintainer['email']
+        maintainer = format('%s: %s %u', self.bold('Maintainer'), mname,
+                            utils.web.mungeEmail(memail))
+        bugsAll = format('%i Total', bugCounts['all'])
+        bugsRC = format('%i RC', bugCounts['rc'])
+        bugs = format('%i Important/Normal', bugCounts['in'])
+        bugsMinor = format('%i Minor/Wishlist', bugCounts['mw'])
+        bugsFixed = format('%i Fixed/Pending', bugCounts['fp'])
         bugL = (bugsAll, bugsRC, bugs, bugsMinor, bugsFixed)
-        s = '.  '.join((version, maintainer, subscribers,
+        s = '.  '.join((version, maintainer,
                         '%s: %s' % (self.bold('Bugs'), '; '.join(bugL))))
-        if updated:
-            s = 'As of %s, %s' % (updated, s)
         irc.reply(s)
     stats = wrap(stats, ['somethingWithoutSpaces'])
 
